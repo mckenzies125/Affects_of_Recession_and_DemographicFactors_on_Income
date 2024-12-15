@@ -2,4 +2,4 @@ The goal of this project was to analyze the impact of the 2008 recession and dem
 
 One particularly interesting observation was the consistent trend that counties closer to New York City tend to have higher average incomes, greater population densities, and more racial diversity compared to counties further away.
 
-This project was submitted as the final assignment for Spatial Fundamentals (DIDA-370).
+This project was submitted as the final assignment for "Spatial Fundamentals." (DIDA-370)
