@@ -1,0 +1,251 @@
+---
+title: "DIDA 370 Final Project"
+author: "Elizabeth Wesonga, McKenzie Skrastins, and Jasmeet Kaur"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(sf)     
+library(dplyr)   
+library(spData) 
+library(ggplot2)
+library(ggthemes)
+library(spdep)
+library(spatialreg)
+library(GWmodel)
+library(tidyr)
+library(urbnmapr)
+```
+
+```{r}
+##The map of NYS 
+setwd("C:/Users/mickey/Desktop/DIDA-370/zip_codes/zip_codes")
+zipcodes<- st_read("cb_2019_us_zcta510_500k.shp")
+colnames(zipcodes)[1] <- "zipcode"
+zipcodes$zipcode <- as.numeric(zipcodes$zipcode)
+
+map_ny <- zipcodes %>% 
+  filter(zipcode > 09999 & zipcode < 15000) 
+
+```
+
+```{r}
+#Place Points, probably don't need
+setwd("C:/Users/mickey/Desktop/DIDA-370/NYS_Place_Points_SHP/NYS_Place_Points_SHP - Copy")
+NYS<- st_read("NYS_Place_Points.shp")
+```
+```{r}
+setwd("C:/Users/mickey/Desktop/DIDA-370/")
+statistics <- read.csv("select_zipcode_statistics.csv")
+#Counties map useful for our data.
+counties <- get_urbn_map("counties", sf = TRUE)
+ny_counties<- counties %>% filter(state_abbv == "NY")
+
+#join the shape file NY map with the statistics
+ny_map_and_stats <- map_ny %>% 
+  left_join(statistics, by = c("zipcode" = "Geographic.Area.Name")) %>%         drop_na() %>% 
+  st_transform("EPSG:32116")
+```
+```{r}
+setwd("C:/Users/mickey/Desktop/DIDA-370/Final_Project")
+income<-read.csv("personal_income_2017.csv")
+population<- read.csv("population_2017.csv")
+
+```
+
+```{r}
+ny_counties<- ny_counties %>% 
+  separate(county_name, c("county_name", "county"), sep = " County") %>% 
+  select(-county)
+
+ny_final<- ny_counties %>% left_join(income, by= c("county_name"= "County")) 
+ny_final<- ny_final %>% select(c(county_fips, state_abbv,state_fips, county_name, fips_class, state_name, Personal_Income, geometry)) 
+ny_final<- ny_final %>% left_join(population, by= c("county_name"= "County"))
+
+```
+
+```{r}
+ny_mapping<- ny_final %>%  st_transform("EPSG:32116")
+map1<- ggplot() +
+  geom_sf(data = ny_mapping,
+    mapping = aes(fill = Population.Density))
+map1
+
+```
+
+```{r}
+breaks<- c(20,50,100,500,5000,10000,80000)
+colors<- c("purple","lightblue","lightgreen","lightpink", "yellow","orange","red")
+map2 <- ggplot() +
+  geom_sf(data = ny_mapping,
+    mapping = aes(fill = Population.Density)) +
+  scale_fill_gradientn(colors= colors, breaks =breaks, limits= c(0,80000), labels= c("0-20", "20-50", "50-100", "100-500", "500-5000", "5000-10000", "10000-80000"))+
+labs(title = "Population Density in 2017")
+map2
+```
+```{r}
+#Without the city
+ny_mapping1<- ny_mapping %>%
+  filter(county_name != "Bronx") %>%
+  filter(county_name != "New York") %>%
+  filter(county_name != "Queens") %>% 
+  filter(county_name != "Kings") %>% 
+  filter(county_name != "Richmond") %>% 
+  filter(county_name != "Nassau")
+map3<- ggplot() +
+  geom_sf(data = ny_mapping1,
+    mapping = aes(fill = Population.Density))
+map3
+```
+
+```{r}
+breaks<- c(0,50,100,500,1000,5000)
+colors<- c("lightblue","lightgreen","lightpink", "yellow","orange","red")
+map4 <- ggplot() +
+  geom_sf(data = ny_mapping,
+    mapping = aes(fill = Population.Density)) +
+  scale_fill_gradientn(colors= colors, breaks =breaks, limits= c(0,80000), labels= c("0-50", "50-100", "100-500", "500-1000", "1000-5000", "5000-10000"))+
+labs(title = "Population Density per Sq Mile in 2017")
+map4
+
+```
+
+```{r}
+map5 <- ggplot() +
+  geom_sf(data = ny_mapping1,
+    mapping = aes(fill = Population.Density)) +
+  theme_minimal()+
+scale_fill_gradient(
+    name = "Population Density",
+    low = "lightyellow",
+    high = "darkred")+
+labs(title = "Population Density per Sq Mile in 2017")
+map5
+```
+
+```{r}
+ny_mapping1<- ny_mapping1 %>% mutate(standardized_income= Personal_Income/1000)
+map6 <- ggplot() +
+  geom_sf(data = ny_mapping1,
+    mapping = aes(fill = standardized_income)) +
+  theme_minimal()+
+scale_fill_gradient(
+    name = "Personal Income \n In Thousands",
+    low = "lightblue",
+    high ="navyblue")+
+labs(title = "Personal Income (Thousands) in 2017")
+map6
+```
+
+```{r}
+setwd("C:/Users/mickey/Desktop/DIDA-370")
+race<- read.csv("race_2017.csv")
+ny_mapping<- ny_mapping%>% left_join(race, by= c("county_name"= "County"))
+```
+
+```{r}
+data_final<- ny_mapping %>% mutate(perc_white= White/Total, perc_black= Black/Total, perc_american_indian= American.Indian/Total, perc_asian= Asian/Total, perc_PI= X.Pacific.Islander/Total, perc_hispanic= Hispanic/Total)
+race_data<- data_final %>% select(perc_white, perc_black, perc_american_indian, perc_asian, perc_PI, perc_hispanic)
+plot(race_data)
+```
+
+```{r}
+map7 <- ggplot() +
+  geom_sf(data = data_final,
+    mapping = aes(fill = perc_white)) +
+  theme_minimal()+
+scale_fill_gradient(
+    name = "Percentage of \n White Population",
+    low = "lightyellow",
+    high = "orange")+
+labs(title = "Percentage of White Population by County")
+map7
+```
+```{r}
+map8 <- ggplot() +
+  geom_sf(data = data_final,
+    mapping = aes(fill = perc_black)) +
+  theme_minimal()+
+scale_fill_gradient(
+    name = "Percentage of \n Black Population",
+    low = "lavender",
+    high = "purple")+
+labs(title = "Percentage of Black Population by County")
+map8
+
+```
+```{r}
+map9 <- ggplot() +
+  geom_sf(data = data_final,
+    mapping = aes(fill = perc_hispanic)) +
+  theme_minimal()+
+scale_fill_gradient(
+    name = "Percentage of \n Hispanic Population",
+    low = "lightpink",
+    high = "red")+
+labs(title = "Percentage of Hispanic Population by County")
+map9
+
+```
+```{r}
+map10 <- ggplot() +
+  geom_sf(data = data_final,
+    mapping = aes(fill = perc_asian)) +
+  theme_minimal()+
+scale_fill_gradient(
+    name = "Percentage of \n Asian Population",
+    low = "lightgreen",
+    high = "darkgreen")+
+labs(title = "Percentage of Asian Population by County")
+map10
+
+
+```
+
+
+```{r}
+data_final<- data_final %>% mutate(standardized_income= Personal_Income/1000) %>% filter(county_name != "Richmond")
+model <- data_final %>% 
+  mutate(white_perc= perc_white*100, black_perc= perc_black*100, asian_perc= perc_asian*100, hispanic_perc= perc_hispanic*100) %>% 
+  select(c(standardized_income, Population.Density, white_perc,black_perc, asian_perc, hispanic_perc, geometry)) %>% 
+  filter(!standardized_income %in% "NA")
+
+(summary(lm1<- lm(standardized_income~ Population.Density+ white_perc+black_perc+asian_perc+hispanic_perc, data= model)))
+```
+
+```{r}
+ny_list1 <- model %>% 
+  poly2nb(st_geometry(model)) %>% 
+  nb2listw(zero.policy = TRUE)
+ 
+lm.morantest(lm1, ny_list1)
+```
+
+```{r}
+LM <- lm.LMtests(lm1, ny_list1, test = "all")
+LM
+```
+```{r}
+lm_lag <- lagsarlm(standardized_income ~ Population.Density + white_perc + black_perc + asian_perc
++ hispanic_perc,
+              data = model,
+              listw = ny_list1,
+              zero.policy = TRUE,
+              na.action = na.omit)
+
+summary(lm_lag)
+###In the context of a spatial autoregressive model, like the one you provided, residual autocorrelation indicates that there are spatial patterns or dependencies that are not accounted for by the model. This could mean that neighboring observations tend to have similar residual values, suggesting spatial clustering or spatial trends that are not captured by the model's predictors.
+
+```
+
+```{r}
+lm_error <- errorsarlm(standardized_income~ Population.Density+ white_perc,
+              data = model,
+              listw = ny_list,
+              zero.policy = TRUE, 
+              na.action = na.omit)
+
+summary(lm_error)
+
+```
